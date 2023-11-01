@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bully-app
+spec:
+  selector:
+    matchLabels:
+      app: bully-app
+  replicas: 2
+  template:
+    metadata:
+      name: bully-app
+      labels:
+        name: bully-app
+        app: bully-app
+    spec:
+      containers:
+        - name: bully-container
+          image: bully-app
+          imagePullPolicy: Never
+          env:
+            - name: WEB_PORT
+              value: "8080"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
