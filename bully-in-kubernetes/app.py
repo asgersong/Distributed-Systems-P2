@@ -9,6 +9,10 @@ WEB_PORT = int(os.environ['WEB_PORT'])
 POD_ID = random.randint(0, 100)
 leader_id = None
 
+def log_status():
+    status = "Leader" if leader_id == POD_ID else "Follower"
+    print(f"Pod ID: {POD_ID}, Status: {status}, Leader ID: {leader_id}")
+
 async def setup_k8s():
     print("K8S setup completed")
 
@@ -23,6 +27,7 @@ async def send_message(pod_ip, endpoint, data):
 async def run_bully():
     global leader_id
     while True:
+        log_status() # Log the current status
         print("Running bully")
         await asyncio.sleep(5) # wait for everything to be up
 
@@ -81,6 +86,7 @@ async def receive_answer(request):
 # POST /receive_election
 async def receive_election(request):
     data = await request.json()
+    print(f"Election received from: {data.get('origin_id')}")
     origin_id = data.get("origin_id")
     if POD_ID > origin_id:
         # Send answer back to originator
