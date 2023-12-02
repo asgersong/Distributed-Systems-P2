@@ -6,7 +6,7 @@ spec:
   selector:
     matchLabels:
       app: bully-app
-  replicas: 4
+  replicas: 2
   template:
     metadata:
       name: bully-app
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: bully-container
-          image: bully-app
+          image: asgersong/bully-app:latest
           imagePullPolicy: Always
           env:
             - name: WEB_PORT
