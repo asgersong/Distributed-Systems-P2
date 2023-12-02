@@ -17,7 +17,7 @@ spec:
       containers:
         - name: bully-container
           image: bully-app
-          imagePullPolicy: Never
+          imagePullPolicy: Always
           env:
             - name: WEB_PORT
               value: "8080"

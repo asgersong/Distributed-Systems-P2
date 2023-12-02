@@ -1,0 +1,17 @@
+Start Docker app
+
+Terminal:
+minikube start 
+minikube dashboard
+
+2. terminal:
+Indsæt begge linjer på en gang
+eval $(minikube docker-env)
+docker build -t bully-app:local . 
+
+3. terminal:
+kubectl apply -f ./k8s/headless-service.yaml
+kubectl apply -f ./k8s/deployment.yaml
+
+4. terminal:
+kubectl port-forward service/bully-service 8080:80
