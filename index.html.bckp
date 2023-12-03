@@ -12,8 +12,18 @@
 </head>
 <body>
     <div id="fortune">Click the button to reveal your fortune!</div>
+    <button onclick="getFortune()">Get My Fortune</button>
 
-   
+    <script>
+        function getFortune() {
+             //use api to get  fortunes and display them in an html box 
+
+            
+
+            // Display the fortune in the HTML
+            document.getElementById('fortune').innerHTML = fortune;
+        }
+    </script>
 </body>
 </html>
 

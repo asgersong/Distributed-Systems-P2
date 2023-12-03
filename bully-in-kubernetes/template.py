@@ -33,16 +33,26 @@ async def run_bully():
         print("Got %d other pod ip's" % (len(ip_list)))
         
         # Get ID's of other pods by sending a GET request to them
+               # Get ID's of other pods by sending a GET request to them
         await asyncio.sleep(random.randint(1, 5))
         other_pods = dict()
         for pod_ip in ip_list:
             endpoint = '/pod_id'
             url = 'http://' + str(pod_ip) + ':' + str(WEB_PORT) + endpoint
-            response = requests.get(url)
-            other_pods[str(pod_ip)] = response.json()
+            try:
+                response = requests.get(url)
+                if response.status_code == 200:
+                    other_pods[str(pod_ip)] = response.json()
+                else:
+                    print(f"Request to {url} failed with status code {response.status_code}. Ignoring.")
             
-        # Other pods in network
-        print(other_pods)
+            except requests.RequestException as e:
+                
+                    print(f"Request to {url} failed with exception: {e}. Ignoring.")
+
+        print("Got %d other pod ip's" % (len(ip_list)), "\n", other_pods)
+       
+     
         
         # Sleep a bit, then repeat
         await asyncio.sleep(2)

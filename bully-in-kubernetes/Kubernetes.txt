@@ -12,7 +12,6 @@ docker build -t bully-app .
 
 docker tag bully-app asgersong/bully-app:latest
 
-
 docker push asgersong/bully-app:latest
 
 docker pull asgersong/bully-app
