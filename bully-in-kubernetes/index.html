@@ -1,19 +1,70 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Fortune Cookie</title>
-    <meta charset="UTF-8"> <!-- Specify UTF-8 encoding -->
-
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
-        #fortune { margin: 20px; padding: 10px; border: 1px solid #333; }
-        button { padding: 5px 15px; }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fortune Cookie App</title>
 </head>
 <body>
-    <div id="fortune">Click the button to reveal your fortune!</div>
 
-   
+    <h1>Your Fortune Cookie</h1>
+    <p id="fortune-text">Fetching fortune...</p>
+
+    <!-- Button to fetch a new fortune -->
+    <button onclick="fetchRandomFortune()">Fetch New Fortune</button>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // Initial category index
+            let categoryIndex = 0;
+
+            // List of categories
+            const categories = ['all', 'bible', 'computers', 'cookie', 'definitions', 'miscellaneous', 'people', 'platitudes', 'politics', 'science', 'wisdom'];
+
+            // Fetch a fortune when the page loads
+            fetchFortune(categories[categoryIndex]);
+        });
+
+        function fetchRandomFortune() {
+            // Get the current category index
+            const categoryIndex = getCurrentCategoryIndex();
+
+            // Fetch fortune from the current category
+            fetchFortune(categories[categoryIndex]);
+        }
+
+        function fetchFortune(category) {
+            // API endpoint for a fortune from a specific category
+            const apiUrl = `/api/fortune/${category}`;
+
+            // Fetch the fortune from the API
+            fetch(apiUrl)
+                .then(response => response.json())
+                .then(data => {
+                    // Update the fortune text on the page
+                    document.getElementById("fortune-text").innerText = data.fortune;
+                })
+                .catch(error => {
+                    console.error("Error fetching fortune:", error);
+                    // Handle errors, e.g., display a default fortune or a message to the user
+                    document.getElementById("fortune-text").innerText = "Failed to fetch fortune. Please try again later.";
+                });
+        }
+
+        function getCurrentCategoryIndex() {
+            // Get the current category index from the HTML element
+            const categoryIndexElement = document.getElementById("category-index");
+            let categoryIndex = parseInt(categoryIndexElement.value);
+
+            // Increment the index and cycle if it exceeds the number of categories
+            categoryIndex = (categoryIndex + 1) % categories.length;
+
+            // Update the category index in the HTML element
+            categoryIndexElement.value = categoryIndex;
+
+            return categoryIndex;
+        }
+    </script>
+
 </body>
 </html>
-

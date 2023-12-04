@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fortune Cookie</title>
+    <meta charset="UTF-8"> <!-- Specify UTF-8 encoding -->
+
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; background-color: blueviolet; }
+        #fortune { margin: 20px; padding: 10px; border: 1px solid #333; }
+        button { padding: 5px 15px; }
+    </style>
+</head>
+<body>
+    <div id="fortune">Click the button to reveal your fortune!</div>
+    <button onclick="getFortune()">Get Fortune</button>
+
+    <script>
+        async function getFortune() {
+            // Fetch data from the new route for getting a fortune
+            const response = await fetch('/get_fortune');
+            const data = await response.json();
+
+            // Update the fortune div with the retrieved fortune
+            const fortuneDiv = document.getElementById('fortune');
+            fortuneDiv.innerHTML = `<p>${data.fortune}</p>`;
+        }
+    </script>
+</body>
+</html>
