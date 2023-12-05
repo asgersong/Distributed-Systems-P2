@@ -3,8 +3,6 @@ make:
 	docker tag bully-app asgersong/bully-app:latest
 	docker push asgersong/bully-app:latest
 
-
-
 start: 
 	minikube start 
 	minikube dashboard

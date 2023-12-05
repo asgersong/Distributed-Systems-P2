@@ -11,28 +11,34 @@ from urllib.parse import urljoin
 import json
 from fortune import FortuneCookieJar  # Import the FortuneCookieJar class
 
+
 POD_IP = str(os.environ["POD_IP"])
 WEB_PORT = int(os.environ["WEB_PORT"])
 POD_ID = random.randint(0, 100)
 current_leader_id = None
 current_leader_ip = None
-candidates = {}
+candidate_ip = None
 is_leader = False
-halt = False
+candidate_id = None
+candidate_list = {}
+ELECTION_IN_PROGRESS = False
+leader_encountered = False
 
 
 async def setup_k8s():
-    await asyncio.sleep(10)
+    print("setting p k8s")
+    await asyncio.sleep(15)
     print("K8S setup completed")
 
 
 async def run_bully():
-    global other_pods, current_leader_id, current_leader_ip, ip_list
+    global other_pods, current_leader_id, current_leader_ip, ip_list, leader_encountered
     await setup_k8s()
-    while True and current_leader_id != POD_ID:
-        if is_leader:
-            break
+    while True:
         try:
+            if is_leader:
+                serve_website()
+                break
             # get pods
             ip_list = []
             response = socket.getaddrinfo("bully-service", 0, 0, 0, 0)
@@ -40,7 +46,13 @@ async def run_bully():
                 ip_list.append(result[-1][0])
             ip_list = list(set(ip_list))
             ip_list.remove(POD_IP)
-            print(current_leader_ip, " and POD", POD_IP , )
+            print(
+                current_leader_ip,
+                " and POD",
+                POD_IP,
+            )
+            await asyncio.sleep(random.randint(1, 5))
+
             other_pods = dict()
             async with aiohttp.ClientSession() as session:
                 for pod_ip in ip_list:
@@ -50,13 +62,23 @@ async def run_bully():
                         async with session.get(url, timeout=2) as response:
                             if response.status == 200:
                                 other_pods[str(pod_ip)] = await response.json()
+                                if response.json() == current_leader_id:
+                                    leader_encountered = True
                             else:
                                 print(
                                     f"Request to {url} failed with status code {response.status}. Ignoring."
                                 )
                     except aiohttp.ClientError as e:
                         print(f"Request to {url} failed with exception: {e}. Ignoring.")
-
+            if leader_encountered:
+                leader_encountered = False
+                print(
+                    "current leader encountered: ",
+                    current_leader_ip,
+                    " ",
+                    current_leader_id,
+                )
+                continue
             print(
                 "Got %d other pod ip's" % (len(other_pods)),
                 "\n",
@@ -66,24 +88,27 @@ async def run_bully():
                 " id: ",
                 POD_ID,
             )
-
-            await asyncio.sleep(random.randint(1, 5))
+            print("ip list: ", ip_list)
+            if pod_ip == current_leader_ip:
+                continue
+            await asyncio.sleep(random.randint(1, 2))
 
             # Implement bully election
 
-           
-            await start_election()
+            if not ELECTION_IN_PROGRESS:
+                await change_election_status()
 
-            await asyncio.sleep(2)
+                await start_election()
+                await candidate_selection()
 
-            await candidate_selection()
+                # Step 2A: Continue with election if you have the highest ID
 
-            # Step 2A: Continue with election if you have the highest ID
-
-            if current_leader_id == POD_ID:
+            if current_leader_id == POD_ID or ip_list == []:
                 print(POD_IP, ": I'm here")
-                # Stop running bul`ly and serve website
+                # Stop running bully and serve website
+
                 await serve_website()
+                await change_election_status()
                 break
 
             # Step 2B: Exit election and try again later
@@ -93,13 +118,12 @@ async def run_bully():
             print(f"failed with exception: {e}. Ignoring.")
 
 
-# GET /pod_id
 async def pod_id(request):
     return web.json_response(POD_ID)
 
 
 async def start_election():
-    global other_pods, ip_list, current_leader_id, current_leader_ip, candidates
+    global other_pods, ip_list, current_leader_id, current_leader_ip, candidate_ip, candidate_id
 
     if current_leader_id != POD_ID or current_leader_id == None:
         # If not already a leader, initiate the election process
@@ -107,8 +131,7 @@ async def start_election():
             if other_pods.get(str(pod_ip), 0) > POD_ID:
                 # Send election message to higher-priority pods
                 endpoint = "/receive_election"
-                if pod_ip == current_leader_ip:
-                    return web.Response(status=200)
+
                 url = f"http://{pod_ip}:{WEB_PORT}{endpoint}"
                 try:
                     async with aiohttp.ClientSession() as session:
@@ -121,52 +144,67 @@ async def start_election():
 
 
 async def candidate_selection():
-    global current_leader_id, current_leader_ip
+    global current_leader_id, current_leader_ip, candidate_ip, candidate_id, is_leader, candidate_list
     print("selection ongoing")
-
-    await asyncio.sleep(2)
-    if current_leader_ip in candidates:
-        return web.Response(status=200)
-
-
-    if candidates == {}:
-        print("The candidates: ", candidates)
-        print(POD_IP, "There are no candidates higher than me")
+    await asyncio.sleep(10)
+    print("my id: ", POD_ID, "cand id:", candidate_id)
+    print("candidates so far: ", candidate_list)
+    if candidate_list == {}:
+        print(POD_IP, "There are no candidates higher than me", candidate_id)
         # Become coordinator, exit bully and start webservice.
         current_leader_ip = POD_IP
         current_leader_id = POD_ID
-    else:
-        max_ip = max(candidates, key=candidates.get, default=None)
-        endpoint = "/become_coordinator"
-        print(POD_IP, " with ID: ", POD_ID, "is sending to : ", max_ip)
-        if max_ip == current_leader_ip:
-            return web.Response(status=200)
-        url = f"http://{max_ip}:{WEB_PORT}{endpoint}"
-        try:
-            print(max_ip)
-            if halt == True:
-                halt = False
-                return web.Response(status=200)
+        is_leader = True
+        for pod_ip in ip_list:
+            endpoint = "/declare_leader"
+            url = f"http://{pod_ip}:{WEB_PORT}{endpoint}"
+            try:
+                async with aiohttp.ClientSession() as session:
+                    await session.post(url, timeout=10)
+            except Exception as e:
+                print(f"An error occurred while sending election message: {e}")
 
+    else:
+        endpoint = "/become_coordinator"
+        url = f"http://{candidate_ip}:{WEB_PORT}{endpoint}"
+        try:
             await aiohttp.ClientSession().post(url, timeout=3)
-            print(f"Sent election message to {max_ip} debug twp")
+            print(f"Sent coordinator message to {candidate_id}")
         except Exception as e:
             print(f"An error occurred while sending election message: {e}")
-            
-
         # Call start webservice on the current_leader
         # implement solution here
+        candidate_id = None
+        candidate_ip = None
+        candidate_list = {}
+        return
 
 
-# pushasdas
-# POST /receive_answer
 async def receive_answer(request):
-    global candidates
+    global candidate_ip, candidate_id, candidate_list
     print("creating candidates")
     sender_pod_ip = request.remote
+    candidate_list[candidate_ip] = candidate_id
     # Append the sender pod IP along with the sender pod ID to the candidates dictionary
-    candidates[sender_pod_ip] = other_pods.get(sender_pod_ip, 0)
-    print(candidates)
+    temp = other_pods.get(sender_pod_ip, 0)
+    if candidate_ip is None:
+        candidate_ip = sender_pod_ip
+        candidate_id = temp
+        print("current highest candidate is: ", candidate_ip, ":", candidate_id)
+
+        return web.Response(status=200)
+
+    if candidate_id < temp:
+        candidate_ip = sender_pod_ip
+        candidate_id = temp
+
+    # Add this part to await the response before returning a web.Response
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Do something with the response if needed
+            pass
+    except Exception as e:
+        print(f"An error occurred in receive_answer: {e}")
 
     return web.Response(status=200)
 
@@ -174,9 +212,6 @@ async def receive_answer(request):
 # POST /receive_election
 async def receive_election(request):
     global other_pods, ip_list, POD_ID, WEB_PORT, POD_IP
-    if current_leader_ip == POD_IP or current_leader_id == POD_ID:
-    
-        return web.Response(status=200)
     sender_pod_ip = request.remote
 
     # Get the pod_id of the sender
@@ -194,34 +229,17 @@ async def receive_election(request):
             url = f"http://{sender_pod_ip}:{WEB_PORT}{endpoint}"
             try:
                 async with aiohttp.ClientSession() as session:
-                    await session.post(url, timeout=10)
-                    print("posted")
-                print("Sent answer to %s" % sender_pod_ip)
+                    # Wait for the response before proceeding
+                    async with session.post(url, timeout=10) as response:
+                        if response.status == 200:
+                            print("Sent answer to %s" % sender_pod_ip)
+                        else:
+                            print("Failed to send answer to %s" % sender_pod_ip)
             except Exception as e:
-                print(f"An error occurred: {e}")
+                print(f"An error occurred in receive_election: {e}")
 
     else:
         print(f"Pod IP {sender_pod_ip} not found in other_pods dictionary.")
-
-    # If we received an election message, we send an election message to all higher IDs
-    if POD_ID < max(other_pods.values()):
-        for higher_pod_ip in ip_list:
-            if (
-                other_pods.get(higher_pod_ip, -1) > POD_ID
-                and current_leader_ip != higher_pod_ip
-            ):
-                endpoint = "/receive_election"
-                if higher_pod_ip == current_leader_ip:
-                    return web.Response(status=200)
-
-                url = f"http://{higher_pod_ip}:{WEB_PORT}{endpoint}"
-                try:
-                    if current_leader_id == POD_ID:
-                        return web.Response(status=200)
-                    await aiohttp.ClientSession().post(url, timeout=3)
-                    print(f"Sent election message to {higher_pod_ip} fuck")
-                except Exception as e:
-                    print(f"An error occurred while sending election message: {e}")
 
     return web.Response(status=200)
 
@@ -244,15 +262,17 @@ async def serve_website():
 
 
 # POST /receive_coordinator
+
+
 async def become_coordinator(request):
-    global current_leader_id, current_leader_ip, is_leader
+    global current_leader_id, current_leader_ip, is_leader, ip_list
     if current_leader_id == POD_ID:
-        return
-    if is_leader == True:
         return web.Response(status=200)
 
+    print("I am becoming coordinator")
     current_leader_ip = POD_IP
     current_leader_id = POD_ID
+    is_leader = True
     for pod_ip in ip_list:
         endpoint = "/declare_leader"
         if pod_ip == current_leader_ip:
@@ -260,23 +280,64 @@ async def become_coordinator(request):
 
         url = f"http://{pod_ip}:{WEB_PORT}{endpoint}"
         try:
-            if current_leader_ip == POD_ID:
+            if current_leader_ip == pod_ip:
                 return web.Response(status=200)
             async with aiohttp.ClientSession() as session:
                 await session.post(url, timeout=10)
-                print("current leader ip is ", current_leader_ip, "sending to", pod_ip )
-            print(f"Sent election message to {pod_ip}")
+            print(f"Sent declare leader message to {pod_ip}")
         except Exception as e:
             print(f"An error occurred while sending election message: {e}")
-    is_leader = True
     return web.Response(status=200)
 
 
 async def declare_leader(request):
-    global current_leader_ip, halt
+    global current_leader_ip, current_leader_id
     current_leader_ip = request.remote
-    halt = True
+    current_leader_id = other_pods[current_leader_ip]
+
     return web.Response(status=200)
+
+
+async def change_election_status():
+    global ip_list
+    for pod in ip_list:
+        endpoint = "/election_ongoing"
+        url = f"http://{pod}:{WEB_PORT}{endpoint}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                await session.post(url, timeout=10)
+            print("changing status for %s" % pod)
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+
+async def election_ongoing():
+    global ELECTION_IN_PROGRESS
+    ELECTION_IN_PROGRESS = not ELECTION_IN_PROGRESS
+    asyncio.sleep(0.2)
+
+
+async def check_leader_availability(current_leader_ip):
+    try:
+        if current_leader_ip is None:
+            # If current_leader_ip is None, consider leader available
+            return False
+        else:
+            # If current_leader_ip is not None, try sending a POST request to the leader
+            endpoint = "/pod_id"
+            url = f"http://{current_leader_ip}:{WEB_PORT}{endpoint}"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, timeout=2) as response:
+                    # Check if there is a response from the leader
+                    if response.status == 200:
+                        print("leader alive")
+                        return True  # Leader is available
+    except Exception as e:
+        # Handle exceptions (e.g., timeout or connection error)
+        print(f"Error checking leader availability: {e}")
+
+    return False  # Leader is not available
 
 
 async def background_tasks(app):
@@ -286,37 +347,9 @@ async def background_tasks(app):
     await task
 
 
-async def check_leader_availability():
-    try:
-        endpoint = "/pod_id"
-        url = f"http://{current_leader_ip}:{WEB_PORT}{endpoint}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=2) as response:
-                return response.status == 200
-    except aiohttp.ClientError:
-        return False
-    
-
-fortunes = [
-    "You will have a great day!",
-    "Good things will come your way.",
-    "A pleasant surprise is waiting for you.",
-    "You will overcome any challenges with ease.",
-    "Happiness is in your future.",
-]
-
-\
-fortune_cookie_jar = FortuneCookieJar()
-
-async def get_fortune(request):
-    # Get a random fortune using FortuneCookieJar
-    fortune = fortune_cookie_jar.get_random_fortune()
-    return web.json_response({"fortune": fortune})
-
 if __name__ == "__main__":
     app = web.Application()
     app.router.add_get("/pod_id", pod_id)
-    app.router.add_get("/get_fortune", get_fortune)
     app.router.add_post("/receive_answer", receive_answer)
     app.router.add_post("/receive_election", receive_election)
     app.router.add_post("/become_coordinator", become_coordinator)
