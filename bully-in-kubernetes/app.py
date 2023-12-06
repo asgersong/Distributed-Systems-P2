@@ -261,8 +261,6 @@ async def serve_website():
     await site.start()
 
 
-# POST /receive_coordinator
-
 
 async def become_coordinator(request):
     global current_leader_id, current_leader_ip, is_leader, ip_list

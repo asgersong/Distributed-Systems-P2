@@ -49,8 +49,8 @@
     \end{itemize}
   
   \subsection{Bully Algorithm}
-    At the heart of this project lies the implementation of the Bully algorithm.
-    The Bully algorithm, described in \cite{molina:1982}, is a classic method used in distributed systems for leader election. It is characterized by its simplicity and straightforward approach to determining the leader node in a cluster of computers. In the context of Kubernetes, this algorithm assumes a new dimension of relevance:
+    At the heart of this project lies the implementation of an improved Bully algorithm.
+    The Bully algorithm, described in \cite{ImprovedBullyElectionAlgorithm:2014}, is a classic method used in distributed systems for leader election. It is characterized by its simplicity, improvement in efficiency, and straightforward approach to determining the leader node in a cluster. In the context of Kubernetes, this algorithm assumes a new dimension of relevance:
   
     \begin{itemize}
       \item \textbf{Election Process}: The algorithm operates by electing the pod with the highest identifier as the leader. When a pod believes it should be the leader (e.g., when the current leader fails), it starts an election process to assert its role.
@@ -93,47 +93,184 @@
       \item \textbf{Headless Service Configuration}: Specified in \texttt{headless-service.yaml}, this service configuration defines the network identity of the pods. It enables the pods to discover each other and communicate, which is essential for the Bully algorithm to function.
     \end{enumerate}
 
-  \subsection{Application Architecture}
-  \subsubsection*{Overview}
-    The architecture of the fortune cookie service is designed to be scalable, resilient, and distributed. It comprises several components, each with a specific role in the overall functionality of the service. The key components include:
+  \subsection{Bully Algorithm Implementation}
+  The Bully algorithm implementation is encapsulated in the \texttt{app.py} file. We were given a template for the implementation in Kubernetes\cite{bullyInKubernetes} and adapted it to suit the needs of the fortune cookie service. The implementation is based on the pseudocode in figure \ref{fig:bully-algorithm-implementation}.
+  \begin{figure}[h!]
+    \centering
+  \begin{verbatim}
+    async function run_bully():
+        Perform setup for Kubernetes environment
+        Loop indefinitely:
+            If the current pod is the leader:
+                Serve the website and exit the loop
+    
+            Retrieve the list of IP addresses of other pods in the cluster
+            For each pod IP in the list:
+                Try to get the pod ID from the pod
+                If the current leader ID is encountered among other pods:
+                    Skip to the next iteration of the loop
+    
+            If an election is not in progress:
+                Change the election status to in progress
+                Start the election process
+                Select the candidate for the leader
+    
+            If the current pod has the highest ID or there are no other pods:
+                Serve the website, change election status, and exit the loop
+    
+            Wait for a specified duration before the next iteration
+    
+        Handle any exceptions that occur during the process
+    \end{verbatim}
+    \caption{Bully Algorithm Implementation}
+    \label{fig:bully-algorithm-implementation}
+  \end{figure}
+
+    The implementation can be found in the \texttt{app.py} file.
+  
+    
+
+  \subsection{Architecture}
+    \subsubsection*{Overview}
+    The architecture of the fortune cookie service is designed to be scalable and distributed, comprising several components, each serving a distinct role in the service's overall functionality:
 
     \begin{itemize}
-      \item \textbf{Frontend}: The user interface of the web application, responsible for presenting the information and interacting with the user.
-      \item \textbf{Backend}: The backend service running in Kubernetes pods, which processes requests, implements the Bully algorithm, and manages the delivery of fortune cookie texts.
-      \item \textbf{Data Storage}: While this application primarily operates in-memory, it can be extended to include a database or file system for persistent data storage.
-      \item \textbf{Networking}: Internal communication between pods, facilitated by Kubernetes networking, especially vital for the Bully algorithm's operation.
+    \item \textbf{Frontend}: This is the user interface of the web application, responsible for presenting information and facilitating user interactions.
+    \item \textbf{Backend}: The backend service operates within Kubernetes pods. It processes requests, implements the Bully algorithm for leader election, and manages the generation and delivery of fortune cookie texts. The application's state, including the results of leader elections and generated fortunes, is maintained temporarily in the pod's memory during runtime. This means that the data is not persistently stored and will be lost if the pod restarts or stops.
+    \item \textbf{Data Storage}: The current implementation of the application does not involve persistent data storage like a database or file system. All operations are performed in-memory, providing fast access but lacking data persistence. However, the architecture allows for the future integration of a database for persistent storage if needed.
+    \item \textbf{Networking}: The application relies on internal Kubernetes networking for communication between pods. This aspect is crucial for the operation of the Bully algorithm, which requires frequent and reliable communication between the pods for leader election and status checks.
+    \item \textbf{Docker Hub and Minikube}: Docker Hub is used to store the container image of the application, while Minikube provides a local Kubernetes environment for development and testing. These tools facilitate the deployment and scaling of the application but do not directly influence the in-memory operation of the application.
     \end{itemize}
 
-  \subsubsection*{Sequence Diagram}
-    A sequence diagram is included to illustrate the flow of operations from the moment a user requests a fortune cookie to the display of the fortune. [Include diagram here]
+    This architecture ensures a balance between efficiency, scalability, and simplicity, making it well-suited for the dynamic environment of a Kubernetes-based deployment.
 
-  \subsubsection*{Class Diagram}
-    The depicted class diagram provides an overview of the structure of \texttt{app.py}. [Include diagram here]
+  \subsubsection*{Endpoints}
+    The \texttt{app.py} file defines the following endpoints for the fortune cookie service:
+    \begin{figure}[h!]
+\centering
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Endpoint} & \textbf{Description} \\
+\hline
+\texttt{/pod\_id} (GET) & Retrieves the ID of the current pod. Used for pod identification during the election process. \\
+\hline
+\texttt{/receive\_answer} (POST) & Receives an answer from a pod during the election process. Helps in determining the current leader. \\
+\hline
+\texttt{/receive\_election} (POST) & Endpoint for receiving election messages from other pods. Triggers the election process in the receiving pod. \\
+\hline
+\texttt{/become\_coordinator} (POST) & Endpoint for declaring the current pod as the new coordinator (leader). Updates the leader status of the pod. \\
+\hline
+\texttt{/declare\_leader} (POST) & Communicates the decision of the election to all other pods. Ensures all pods are aware of the current leader. \\
+\hline
+\texttt{/election\_ongoing} (POST) & Signals the status of an ongoing election. Helps in managing the election state across pods. \\
+\hline
+\texttt{/} (GET) & Serves the main webpage (index.html). Primary user interface for the application. \\
+\hline
+\texttt{/receive\_coordinator} (POST) & Receives information about the coordinator (leader) pod. Updates the leader information in the pod receiving this request. \\
+\hline
+\end{tabular}
+\caption{Overview of the endpoints in the Bully Algorithm Implementation}
+\label{fig:endpoints}
+\end{figure}
 
+Note that the '\texttt{/}' endpoint is not explicitly defined in the \texttt{app.py} file. Instead, it is configured in the \texttt{serve\_website} function, which is called when the application is run. This function serves the \texttt{index.html} file, which is the main webpage of the application on the web-port 8080.
       
   \subsection{Deployment and Testing Process}
     This subsection details the critical steps involved in deploying and testing the fortune cookie service within a Kubernetes environment. It highlights the processes of building and deploying the application, followed by load testing and failure simulation, ensuring the system's robustness and reliability.
-    \begin{enumerate}
-      \item \textbf{Building and Pushing Docker Images}: The first step in the deployment process is to build the Docker images for the fortune cookie service and the Bully algorithm implementation. The images are then pushed to Docker Hub, a cloud-based repository for storing and sharing container images. This step is streamlined using a \texttt{Makefile}.
-      \item \textbf{Apply Kubernetes Configuration}: The next step is to apply the Kubernetes configuration files to the cluster. Kubernetes configurations were applied using \texttt{kubectl apply} commands for the deployment and the headless service. This step is also streamlined using a \texttt{Makefile}.
-      \item \textbf{Load Testing}: Load tests were performed by sending rapid HTTP requests to the service endpoint to evaluate the systems' response times and robustness under heavy load.
-      \item \textbf{Failure Simulation}: Leader pod failures were simulated by manually deleting the leader pod responsible for serving the web interface and observing the behavior of the system. 
-    \end{enumerate}
+      \subsubsection{Building and Pushing Docker Images} 
+        The first step in the deployment process is to build the Docker images for the fortune cookie service and the Bully algorithm implementation. The images are then pushed to Docker Hub, a cloud-based repository for storing and sharing container images. This step is streamlined using a \texttt{Makefile}.
+      \subsubsection{Apply Kubernetes Configuration} 
+        The next step is to apply the Kubernetes configuration files to the cluster. Kubernetes configurations were applied using \texttt{kubectl apply} commands for the deployment and the headless service. This step is also streamlined using a \texttt{Makefile}.
+      \subsubsection{Load Testing}
+        Load tests were performed by sending rapid HTTP requests to the service endpoint to evaluate the systems' response times and robustness under heavy load. \\
+        The test involved the following steps:
 
-  \subsection{Monitoring and Observations}
-    Monitoring tools within Kubernetes, such as the Dashboard and log output, were used to observe the system's behavior during experiments. Key observations include response times during load testing and the time taken to elect a new leader during failure simulation.
+        \begin{enumerate}
+            \item Increasing the number of threads in orders of magnitude from 10 to 1,000,000 to simulate concurrent users.
+            \item Sending 1,000 requests per thread to the service hosted on a local Kubernetes cluster.
+            \item Recording the response time for each request.
+            \item Calculating the average response time for each thread count.
+            \item Repeating the test 10 times for each thread count and calculating the average of these averages to ensure consistency.
+        \end{enumerate}
 
+        The results from the load tests were as follows:
+
+        \begin{center}
+        \begin{tabular}{ |c|c| }
+        \hline
+        Number of Threads & Average Response Time (seconds) \\
+        \hline
+        10 & 0.08 \\
+        100 & 0.88 \\
+        1,000 & 4.78 \\
+        10,000 & 5.17 \\
+        100,000 & 4.17 \\
+        1,000,000 & 4.99 \\
+        \hline
+        \end{tabular}
+        \end{center}
+
+        \subsubsection{Failure Simulation}
+        Experiments were conducted to assess the distributed system's resilience by simulating leader pod failures. The process involved identifying the leader pod, forcefully deleting it, and monitoring the system's automated recovery and leader re-election process. This procedure was repeated 20 times to test the consistency of the Bully algorithm's performance.
+        
+        The average time taken for the system to elect a new leader and recover from the failure was approximately 29.6 seconds, demonstrating the robustness of the system's self-healing capabilities. These findings validate the system's resilience and the effectiveness of the Bully algorithm under failure conditions.
+        
+        The details of the failure simulation and the system's response are documented on video\cite{youtubevideo}, showcasing the self-healing process in action.
+        
+   
 
   \subsection{Discussion}
+    \subsubsection*{Load Test Results and System Performance Evaluation}
+      The load testing conducted on the fortune cookie service provides a nuanced picture of the system's performance across various levels of concurrency. At lower levels, up to 100 concurrent threads, the service maintains rapid response times, demonstrating its capability to efficiently handle traffic. However, as the concurrency level rises to 1,000 threads and beyond, response times increase, indicating the system is encountering bottlenecks in managing high concurrency levels.
+      
+      Although there's a modest leveling off of response times at 10,000 threads, suggesting resource saturation or queuing mechanisms at play, a surprising decrease in response times at 100,000 threads points to the system's adaptive optimizations. Yet, this trend reverses once again when faced with one million threads, where response times climb, signaling a threshold where the system's performance begins to degrade due to resource constraints or contention.
+      
+      From these results, it's clear that strategic scaling is necessary to enhance the system's capacity for handling intense loads. Potential strategies for improving scalability and system efficiency include:
+      
+      \begin{itemize}
+        \item Reducing the overhead associated with the Bully algorithm during the leader election process, which may involve algorithmic refinements or optimizations in inter-pod communication.
+        \item Implementing horizontal pod autoscaling that can dynamically scale the number of pod replicas based on real-time traffic demands, ensuring that the service can accommodate spikes in user requests without compromising performance.
+        \item Integrating service mesh solutions like Istio\cite{istio} to provide advanced traffic management capabilities, including intelligent routing, load balancing, and fine-grained control over inter-service communication.
+      \end{itemize}
+      
+      The intersection of these findings and strategies underscores the importance of a holistic approach to building and maintaining scalable, resilient distributed systems. The project's experiences serve as a valuable reference for future endeavors in cloud-native application development and underscore the dynamic nature of performance engineering in distributed computing environments.
+  
+      \subsubsection*{System Robustness and Fault Tolerance}
+      The time taken for leader election, as observed during failure simulations, highlights an area of improvement. While the election process is effective, the duration of nearly half a minute may not be suitable for high-availability systems where even brief downtime can be detrimental. 
+
+      Future improvements could focus on optimizing the Bully algorithm to reduce this time. Enhancements could include:
+
+      \begin{itemize}
+        \item \textbf{Algorithmic Optimization:} Refining the Bully algorithm to reduce the number of message exchanges required for leader election, thereby decreasing the overall election time.
+        \item \textbf{Network Latency Reduction:} Implementing network policies that prioritize election traffic and reduce latency, ensuring that election messages are delivered and processed faster.
+        \item \textbf{Stateful Leader Election:} Introducing stateful mechanisms that remember past leaders and their states, possibly leading to a quicker consensus in re-election scenarios.
+        \item \textbf{Proactive Leader Monitoring:} Establishing more aggressive health checks and monitoring to detect leader failure early and initiate the election process sooner.
+      \end{itemize}
+
+      These potential optimizations aim to not only reduce the time taken to elect a new leader but also to enhance the overall resilience and reliability of the system.
+
 
 \section{Conclusion and perspectives}
-    \subsection{Conclusion}
-    
-    \subsection{Lessons Learned}
+      
+  \subsection{Conclusion}
+  This project has successfully demonstrated the integration of the Bully algorithm within a Kubernetes environment to create a resilient, distributed web application. The digital fortune cookie service, powered by this integration, highlights the potential of combining container orchestration with leader election mechanisms to build robust systems. The experiments conducted, including load testing and failure simulation, have provided valuable insights into the system's scalability, performance, and fault tolerance.
 
-    \subsection{Future Work}
+  Through strategic use of Kubernetes' features such as pods, services, and networking, along with the efficient implementation of the Bully algorithm, the service has shown to be capable of maintaining high availability even under adverse conditions. The load testing has revealed the service's responsiveness at various concurrency levels, pointing to the necessity for further optimization to handle high traffic volumes effectively.
 
-\newpage
+  \subsection{Future Work}
+  The project has laid a strong foundation for a resilient and scalable distributed system using Kubernetes and the Bully algorithm. However, there are opportunities for enhancement that can further automate the system and minimize manual intervention. Future developments may include:
+
+\begin{itemize}
+  \item \textbf{Automation of Service Exposure:} Currently, when the leader pod fails, manual port-forwarding is required to restore access to the service. Future iterations could implement a more dynamic and automated approach to service exposure, such as using Kubernetes Ingress or a service mesh like Istio. These tools could provide automatic rerouting of traffic to the newly elected leader pod without manual intervention.
+  \item \textbf{Enhanced Bully Algorithm Efficiency:} Optimizing the leader election process to reduce overhead and election time, ensuring rapid failover and minimal service disruption.
+  \item \textbf{Persistent Storage Integration:} Incorporating a persistent storage solution to maintain state and user data across pod restarts and failures, which would be crucial for services requiring data durability.
+\end{itemize}
+
+Incorporating these enhancements will address current limitations and expand the system's capabilities, moving towards a fully autonomous and self-healing architecture that is critical for cloud-native applications operating at scale.
+\vspace*{0.2cm}
+
+  In conclusion, the project stands as a testament to the efficacy of Kubernetes and the Bully algorithm in creating a scalable, fault-tolerant service. The insights gained pave the way for future advancements in cloud-native application development, promising greater resilience and agility in distributed computing environments.
+
     \bibliographystyle{IEEEtran} % We choose the "plain" reference style
     \nocite{*}
     \bibliography{P2} % Entries are in the refs.bib file

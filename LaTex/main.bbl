@@ -21,6 +21,33 @@
 \providecommand{\BIBdecl}{\relax}
 \BIBdecl
 
+\bibitem{ImprovedBullyElectionAlgorithm:2014}
+\BIBentryALTinterwordspacing
+P.~B. Soundarabai, R.~Sahai, T.~J, K.~R. Venugopal, and L.~M. Patnaik,
+  ``Improved bully election algorithm for distributed systems,'' 2014, last
+  accessed 5 October 2023. [Online]. Available:
+  \url{http://de.arxiv.org/abs/1403.3255v1}
+\BIBentrySTDinterwordspacing
+
+\bibitem{bullyInKubernetes}
+\BIBentryALTinterwordspacing
+CML, ``Bully algorithm implementation in kubernetes,'' 2023, [Online; accessed
+  20 November 2023]. [Online]. Available:
+  \url{https://github.com/thecml/bully-in-kubernetes}
+\BIBentrySTDinterwordspacing
+
+\bibitem{youtubevideo}
+\BIBentryALTinterwordspacing
+Project 2. Accessed on 6 December 2023. [Online]. Available:
+  \url{https://www.youtube.com/watch?v=dvfqK8dEVHY}
+\BIBentrySTDinterwordspacing
+
+\bibitem{istio}
+\BIBentryALTinterwordspacing
+Istio. Accessed on 6 December 2023. [Online]. Available:
+  \url{https://istio.io/}
+\BIBentrySTDinterwordspacing
+
 \bibitem{molina:1982}
 H.~Garcia-Molina, ``Elections in a distributed computing system,''
   \emph{Transactions on Computing Systems C-31}, 1982.
